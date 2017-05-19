@@ -1,0 +1,238 @@
+#!/bin/sh
+# GCC package build script (written by volkerdi@slackware.com)
+# Updated by Eric Hameleers,
+# to only build a static gcc used to bootstrap a multilib compiler suite.
+#
+# Copyright 2003, 2004  Slackware Linux, Inc., Concord, California, USA
+# Copyright 2005, 2006, 2007, 2008, 2009  Patrick J. Volkerding, Sebeka, MN, USA
+# All rights reserved.
+#
+# Redistribution and use of this script, with or without modification, is
+# permitted provided that the following conditions are met:
+#
+# 1. Redistributions of this script must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+#
+#  THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR IMPLIED
+#  WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+#  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO
+#  EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+#  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+#  PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+#  OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+#  WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+#  OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+#  ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+
+VERSION=${VERSION:-7.1.0}
+ARCH=${ARCH:-x86_64}
+TARGET=$ARCH-slackware-linux
+BUILD=${BUILD:-1_wls}
+
+# How many jobs to run in parallel:
+NUMJOB=" -j 4 "
+
+if [ "$ARCH" = "i486" ]; then
+  SLKCFLAGS="-O2 -march=i486 -mtune=i686"
+  LIBDIRSUFFIX=""
+elif [ "$ARCH" = "i586" ]; then
+  SLKCFLAGS="-O2 -march=i586 -mtune=i686"
+  LIBDIRSUFFIX=""
+elif [ "$ARCH" = "i686" ]; then
+  SLKCFLAGS="-O2 -march=i686"
+  LIBDIRSUFFIX=""
+elif [ "$ARCH" = "s390" ]; then
+  SLKCFLAGS="-O2"
+  LIBDIRSUFFIX=""
+elif [ "$ARCH" = "x86_64" ]; then
+  SLKCFLAGS="-O2 -fPIC"
+  LIBDIRSUFFIX="64"
+fi
+
+CWD=$(pwd)
+# Temporary build location.  This should *NOT* be a directory
+# path a non-root user could create later...
+TMP=/gcc-$(mcookie)
+
+# This is the main DESTDIR target:
+PKG1=$TMP/package-gcc
+
+# Clear the build locations:
+if [ -d $TMP ]; then
+  rm -rf $TMP
+fi
+mkdir -p $PKG1/usr/doc/gcc-$VERSION
+
+# Insert package descriptions:
+mkdir -p $PKG1/install
+cat $CWD/slack-desc.gcc > $PKG1/install/slack-desc
+
+# Prepare package structure
+mkdir -p $PKG1/usr/{bin,lib,lib64,include}
+
+cd $TMP
+tar xvf $CWD/gcc-$VERSION.tar.?z*
+
+# install docs
+( cd gcc-$VERSION
+  # Smite the fixincludes:
+  zcat $CWD/gcc-no_fixincludes.diff.gz | patch -p1 --verbose --backup --suffix=.orig || exit 1
+  # Fix perms/owners
+  chown -R root:root .
+  find . -perm 777 -exec chmod 755 {} \;
+  find . -perm 775 -exec chmod 755 {} \;
+  find . -perm 754 -exec chmod 755 {} \;
+  find . -perm 664 -exec chmod 644 {} \;
+  mkdir -p $PKG1/usr/doc/gcc-$VERSION
+  # Only the most recent ChangeLog... shouldn't be too big. :)
+  cp -a \
+    BUGS COPYING* ChangeLog \
+    ChangeLog.tree-ssa FAQ INSTALL \
+    LAST_UPDATED MAINTAINERS NEWS \
+    README* *.html \
+  $PKG1/usr/doc/gcc-$VERSION
+
+  mkdir -p $PKG1/usr/doc/gcc-${VERSION}/gcc
+  ( cd gcc
+    cp -a \
+      ABOUT* COPYING* LANG* ONEWS README* SERVICE \
+    $PKG1/usr/doc/gcc-$VERSION/gcc
+
+  # Add the SlackBuild:
+  cat $0 > $PKG1/usr/doc/gcc-$VERSION/gcc-static.SlackBuild
+  chmod 644 $PKG1/usr/doc/gcc-$VERSION/gcc-static.SlackBuild
+
+  ) || exit 1
+
+)
+# build gcc
+( mkdir gcc.build.lnx;
+  cd gcc.build.lnx;
+
+  if [ "$ARCH" != "x86_64" ]; then
+    GCC_ARCHOPTS="--with-arch=$ARCH"
+  else
+    GCC_ARCHOPTS="--enable-multilib"
+  fi
+ 
+  # These should not be set:
+  unset CFLAGS
+  unset CXXFLAGS
+
+  # So that the build does not drag in the non-multilib host headers:
+  mkdir -p $TMP/include
+  touch $TMP/include/limits.h
+  #echo "I'm spamming your includes: /usr/include/gnu"
+  if [ ! -f /usr/include/gnu/stubs-32.h ]; then
+    cp /usr/include/gnu/stubs-64.h /usr/include/gnu/stubs-32.h
+  fi
+  if [ ! -f /usr/include/gnu/lib-names-32.h ]; then
+    cp /usr/include/gnu/lib-names-64.h /usr/include/gnu/lib-names-32.h
+  fi
+
+  ../gcc-$VERSION/configure \
+     --with-local-prefix=$TMP \
+     --prefix=/usr \
+     --libdir=/usr/lib$LIBDIRSUFFIX \
+     --without-headers \
+     --with-system-zlib \
+     --with-newlib \
+     --disable-shared \
+     --disable-nls \
+     --disable-decimal-float \
+     --disable-libgomp \
+     --disable-libmudflap \
+     --disable-libssp \
+     --disable-threads \
+     --enable-languages=c \
+     --verbose \
+     $GCC_ARCHOPTS \
+     --target=${TARGET} \
+     --build=${TARGET} \
+     || exit 1
+
+     #--host=${TARGET}
+     
+  # Start the build:
+
+  make all-gcc all-target-libgcc
+
+  # Set GCCCHECK=something to run the tests
+  if [ ! -z $GCCCHECK ]; then
+    make $NUMJOB check
+  fi
+
+  make install-gcc install-target-libgcc DESTDIR=$PKG1
+
+# Be sure the "specs" file is installed.
+if [ ! -r $PKG1/usr/lib${LIBDIRSUFFIX}/gcc/${ARCH}-slackware-linux/${VERSION}/specs ]; then
+  cat gcc/specs > $PKG1/usr/lib${LIBDIRSUFFIX}/gcc/${ARCH}-slackware-linux/${VERSION}/specs
+fi
+
+  # This is provided by binutils, so delete it here:
+  rm -f $PKG1/usr/lib${LIBDIRSUFFIX}/libiberty.a
+  rm -f $PKG1/usr/lib/libiberty.a # catch-all
+
+  # Fix stuff up:
+  ( cd $PKG1
+    # *not* ${LIBDIRSUFFIX}
+    mkdir -p lib
+    cd lib
+    ln -sf /usr/bin/cpp .
+  )
+  ( cd $PKG1/usr/bin
+    mv gcc gcc-$VERSION
+    ln -sf gcc-$VERSION gcc
+    ln -sf gcc cc
+    ln -sf gcc-$VERSION ${TARGET}-gcc
+    ln -sf gcc-$VERSION ${TARGET}-gcc-$VERSION
+  )
+
+# keep a log
+) 2>&1 | tee $TMP/gcc.build.log
+
+# Filter all .la files (thanks much to Mark Post for the sed script):
+( cd $TMP
+  for file in $(find . -type f -name "*.la") ; do
+    cat $file | sed -e 's%-L/gcc-[[:graph:]]* % %g' > $TMP/tmp-la-file
+    cat $TMP/tmp-la-file > $file
+  done
+  rm $TMP/tmp-la-file
+)
+
+## Strip bloated binaries and libraries:
+for dir in $PKG1; do
+  ( cd $dir
+    find . -name "lib*so*" -exec strip --strip-unneeded "{}" \;
+    find . -name "lib*a" -exec strip -g "{}" \;
+    strip --strip-unneeded usr/bin/* 2> /dev/null
+    find . | xargs file | grep "executable" | grep ELF | cut -f 1 -d : | xargs strip --strip-unneeded 2> /dev/null
+    find . | xargs file | grep "shared object" | grep ELF | cut -f 1 -d : | xargs strip --strip-unneeded 2> /dev/null
+  )
+done
+
+# Process man and info
+if [ -d $PKG1/usr/share/man ]; then
+  mv $PKG1/usr/share/man $PKG1/usr/
+  find $PKG1/usr/man -type f -exec gzip -9 {} \;
+  for i in $(find $PKG1/usr/man -type l); do ln -s $( readlink $i ).gz $i.gz; done;
+  ( cd $PKG1/usr/man/man1;
+    ln -sf g++.1.gz c++.1.gz
+    ln -sf gcc.1.gz cc.1.gz )
+fi
+if [ -d $PKG1/usr/share/info ]; then
+  mv $PKG1/usr/share/info $PKG1/usr/
+  rm -f $PKG1/usr/info/dir
+  gzip -9 $PKG1/usr/info/*.info
+fi
+
+# Cleaning /usr/share
+rm -rf $PKG1/usr/share
+
+( cd $PKG1
+  /sbin/makepkg -l y -c n $TMP/gcc-${VERSION}_static-$ARCH-$BUILD.txz )
+
+echo
+echo "Slackware GCC (static) package build complete!"
+echo
