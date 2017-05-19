@@ -76,16 +76,24 @@ NOTE
 
 When building a multilib gcc/glibc from scratch on Slackware64, and the
 installed compiler is still built with '--disable-multilib' you need to edit:
+
   /usr/lib64/gcc/x86_64-slackware-linux/4.3.3/specs
+
 and change the lines:
-  *multilib:
+
+*multilib:
   . !m64 !m32;.:../lib64 m64 !m32;32:../lib !m64 m32;
+
 to:
-  *multilib:
+
+*multilib:
   . !m64 !m32;.:../lib64 m64 !m32;../lib !m64 m32;
+
 or else you will get errors like:
-  checking for suffix of object files... configure: error: cannot compute suffix of object files: cannot compile
+
+checking for suffix of object files... configure: error: cannot compute suffix of object files: cannot compile
 
 =============================================================================
 Wrote by Eric Hameleers <alien@slackware.com> 25-jun-2009
+
 Modified by Widya Walesa <walecha_99_[at]_gmail_[dot]_com> 09-May-2017
