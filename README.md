@@ -82,11 +82,13 @@ installed compiler is still built with '--disable-multilib' you need to edit:
 and change the lines:
 
 *multilib:
+
   . !m64 !m32;.:../lib64 m64 !m32;32:../lib !m64 m32;
 
 to:
 
 *multilib:
+
   . !m64 !m32;.:../lib64 m64 !m32;../lib !m64 m32;
 
 or else you will get errors like:
@@ -94,6 +96,7 @@ or else you will get errors like:
 checking for suffix of object files... configure: error: cannot compute suffix of object files: cannot compile
 
 =============================================================================
+
 Wrote by Eric Hameleers <alien@slackware.com> 25-jun-2009
 
 Modified by Widya Walesa <walecha_99_[at]_gmail_[dot]_com> 09-May-2017
