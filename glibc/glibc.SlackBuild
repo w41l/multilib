@@ -24,7 +24,7 @@
 
 VERSION=${VERSION:-$(echo glibc-*.tar.xz | rev | cut -f 3- -d . | cut -f 1 -d - | rev)}
 CHECKOUT=${CHECKOUT:-""}
-BUILD=${BUILD:-1}
+BUILD=${BUILD:-3}
 
 # I was considering disabling NSCD, but MoZes talked me out of it.  :)
 #DISABLE_NSCD=" --disable-nscd "
@@ -139,6 +139,15 @@ apply_patches() {
   zcat $CWD/glibc.ldd.trace.through.dynamic.linker.diff.gz | patch -p1 --verbose || exit 1
   # Add a C.UTF-8 locale:
   zcat $CWD/glibc-c-utf8-locale.patch.gz | patch -p1 --verbose || exit 1
+  # Revert patches that cause spurious warnings about IFUNC symbols:
+  zcat $CWD/glibc.IFUNC.i386.revert.diff.gz | patch -p1 --verbose || exit 1
+  zcat $CWD/glibc.IFUNC.x86_64.revert.diff.gz | patch -p1 --verbose || exit 1
+  # Upstream git patches for security hardening (CVE-2017-1000366):
+  zcat $CWD/glibc.3776f38f.diff.gz | patch -p1 --verbose || exit 1
+  zcat $CWD/glibc.46703a39.diff.gz | patch -p1 --verbose || exit 1
+  zcat $CWD/glibc.CVE-2017-1000366.3c7cd212.diff.gz | patch -p1 --verbose || exit 1
+  zcat $CWD/glibc.adc7e06f.diff.gz | patch -p1 --verbose || exit 1
+  zcat $CWD/glibc.c69d4a0f.diff.gz | patch -p1 --verbose || exit 1
 }
 
 # This is going to be the initial $DESTDIR:

@@ -26,7 +26,7 @@
 
 VERSION=${VERSION:-$(echo glibc-*.tar.xz | rev | cut -f 3- -d . | cut -f 1 -d - | rev)}
 CHECKOUT=${CHECKOUT:-""}
-BUILD=${BUILD:-1_wls}
+BUILD=${BUILD:-3_wls}
 
 # I was considering disabling NSCD, but MoZes talked me out of it.  :)
 #DISABLE_NSCD=" --disable-nscd "
@@ -168,6 +168,12 @@ apply_patches() {
   # Revert patches that cause spurious warnings about IFUNC symbols:
   zcat $CWD/glibc.IFUNC.i386.revert.diff.gz | patch -p1 --verbose || exit 1
   zcat $CWD/glibc.IFUNC.x86_64.revert.diff.gz | patch -p1 --verbose || exit 1
+  # Upstream git patches for security hardening (CVE-2017-1000366):
+  zcat $CWD/glibc.3776f38f.diff.gz | patch -p1 --verbose || exit 1
+  zcat $CWD/glibc.46703a39.diff.gz | patch -p1 --verbose || exit 1
+  zcat $CWD/glibc.CVE-2017-1000366.3c7cd212.diff.gz | patch -p1 --verbose || exit 1
+  zcat $CWD/glibc.adc7e06f.diff.gz | patch -p1 --verbose || exit 1
+  zcat $CWD/glibc.c69d4a0f.diff.gz | patch -p1 --verbose || exit 1
 
   if [ $BOOTSTRP -eq 1 ] ; then
     # Multilib - Disable check for forced unwind (Patch from eglibc) since we
@@ -177,9 +183,9 @@ apply_patches() {
   fi
   
   # Fix limits.h inclusion in argp.h
-  echo "===> Apply patch: argp.h"
-  mv include/argp.h include/argp.h.orig
-  cat $CWD/argp.h > include/argp.h
+#   echo "===> Apply patch: argp.h"
+#   mv include/argp.h include/argp.h.orig
+#   cat $CWD/argp.h > include/argp.h
 }
 
 # This is going to be the initial $DESTDIR:
